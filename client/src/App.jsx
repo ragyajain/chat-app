@@ -64,7 +64,7 @@ function App() {
     setIsTyping(false);
     socket.emit("join_room", { user1: username, user2: selectedUser });
 
-    fetch(`http://localhost:5000/api/messages/${username}/${selectedUser}`)
+    fetch(`${import.meta.env.VITE_BACKEND_URL}/api/messages/${username}/${selectedUser}`)
       .then((res) => res.json())
       .then((data) => {
         setChat(data);

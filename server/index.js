@@ -26,7 +26,7 @@ const server = http.createServer(app);
 
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://your-app-name.vercel.app", 
+  "https://chat-app-8fzx.onrender.com", 
 ];
 
 app.use(cors({ origin: allowedOrigins }));
