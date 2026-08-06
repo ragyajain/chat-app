@@ -14,6 +14,7 @@ function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [uploading, setUploading] = useState(false);
   const typingTimeout = useRef(null);
+  const chatEndRef = useRef(null);
 
   useEffect(() => {
     if (!username) return;
@@ -79,6 +80,10 @@ function App() {
       })
       .catch((err) => console.error("Error fetching messages:", err));
   }, [selectedUser, username]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chat]);
 
   const handleTyping = (e) => {
     setMessage(e.target.value);
@@ -275,6 +280,7 @@ function App() {
                   </div>
                 );
               })}
+              <div ref={chatEndRef} />
             </div>
 
             <div className="px-6 py-4 border-t border-slate/15 bg-white">
