@@ -5,7 +5,6 @@ const User = require("../models/User");
 
 const router = express.Router();
 
-// SIGNUP
 router.post("/signup", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -14,19 +13,16 @@ router.post("/signup", async (req, res) => {
       return res.status(400).json({ error: "Username and password required" });
     }
 
-    // Check if user already exists
     const existingUser = await User.findOne({ username });
     if (existingUser) {
       return res.status(400).json({ error: "Username already taken" });
     }
 
-    // Password ko hash karo (lock kar do)
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = new User({ username, password: hashedPassword });
     await newUser.save();
 
-    // Token banao
     const token = jwt.sign({ 
       id: newUser._id, 
       username: newUser.username 
@@ -41,7 +37,6 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-// LOGIN
 router.post("/login", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -51,7 +46,6 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ error: "Invalid username or password" });
     }
 
-    // Hashed password ke saath compare karo
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ error: "Invalid username or password" });

@@ -21,6 +21,14 @@ const messageSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  isFile: {
+    type: Boolean,
+    default: false,
+  },
+  fileType: {
+    type: String,
+    default: null,
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model("Message", messageSchema);

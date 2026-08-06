@@ -17,7 +17,6 @@ app.use(express.json());
 const authRoutes = require("./routes/auth");
 app.use("/api/auth", authRoutes);
 
-// MongoDB connect
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
@@ -38,7 +37,6 @@ const io = new Server(server, {
   },
 });
 
-// Basic test route
 app.get("/", (req, res) => {
     res.send("Chat server is running");
 });
@@ -58,31 +56,24 @@ app.get("/api/messages/:user1/:user2", async (req, res) => {
   }
 });
 
-// Online users track karne ke liye: { username: socketId }
 const onlineUsers = {};
 
 io.on("connection", (socket) => {
   console.log("✅ A user connected:", socket.id);
 
-  // Jab user login karke apna username bataye
   socket.on("user_online", (username) => {
     onlineUsers[username] = socket.id;
-    socket.username = username; // socket ke saath username attach kar do future use ke liye
-    console.log("Current online users:", onlineUsers); //temp
-    // Sabko updated online users list bhejo
+    socket.username = username; 
     io.emit("online_users", Object.keys(onlineUsers));
   });
 
-  // NAYA — jab user kisi specific user se chat kholta hai
   socket.on("join_room", ({ user1, user2 }) => {
-    const roomId = [user1, user2].sort().join("-"); // dono naam sort karke jodo
+    const roomId = [user1, user2].sort().join("-"); 
     socket.join(roomId);
     console.log(`${socket.username} joined room: ${roomId}`);
   });
 
-  //emit.to - sbko bhejta h including sender and socket.to - sbko bhejta h except sender ko
   socket.on("typing", ({ sender, receiver }) => {
-    // console.log("Typing event received:", sender, "->", receiver);
     const roomId = [sender, receiver].sort().join("-");
     socket.to(roomId).emit("user_typing", sender);
   });
@@ -92,7 +83,6 @@ io.on("connection", (socket) => {
     socket.to(roomId).emit("user_stop_typing", sender);
   });
 
-  // Messaging ke liye (ye already tha, isko hataya nahi)
   socket.on("send_message", async (data) => {
     console.log("📩 Message received:", data);
 
@@ -105,20 +95,17 @@ io.on("connection", (socket) => {
       console.error("❌ Error saving message:", err);
     }
 
-    // Sirf is room ke andar bhejo, sabko nahi
     io.to(roomId).emit("receive_message", data);
   });
 
   socket.on("mark_seen", async ({ sender, receiver }) => {
     try {
-      // Sender ke jitne bhi messages receiver ne abhi tak nahi dekhe, unhe "seen" kar do
       await Message.updateMany(
         { senderId: sender, receiverId: receiver, seen: false },
         { $set: { seen: true } }
       );
 
       const roomId = [sender, receiver].sort().join("-");
-      // Sender ko batao ki uske messages dekh liye gaye
       io.to(roomId).emit("messages_seen", { by: receiver });
     } catch (err) {
       console.error("❌ Error marking messages as seen:", err);
@@ -128,7 +115,6 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     console.log("❌ A user disconnected:", socket.id);
 
-    // Disconnect hone waale user ko list se hata do
     if (socket.username) {
       delete onlineUsers[socket.username];
       io.emit("online_users", Object.keys(onlineUsers));
