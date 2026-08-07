@@ -9,6 +9,7 @@ const mongoose = require("mongoose");
 require("dotenv").config();
 
 const Message = require("./models/Message");
+const User = require("./models/User");
 
 const app = express();
 app.use(cors());
@@ -39,6 +40,16 @@ const io = new Server(server, {
 
 app.get("/", (req, res) => {
     res.send("Chat server is running");
+});
+
+app.get("/api/users/:username", async (req, res) => {
+  try {
+    const { username } = req.params;
+    const users = await User.find({ username: { $ne: username } }).select("username -_id");
+    res.json(users.map((u) => u.username));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
 });
 
 app.get("/api/messages/:user1/:user2", async (req, res) => {

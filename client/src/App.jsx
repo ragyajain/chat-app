@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import socket from "./socket";
 import Auth from "./Auth";
+import imageCompression from "browser-image-compression";
 
 function App() {
   const [isConnected, setIsConnected] = useState(false);
@@ -15,11 +16,20 @@ function App() {
   const [uploading, setUploading] = useState(false);
   const typingTimeout = useRef(null);
   const chatEndRef = useRef(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const audioChunks = useRef([]);
+  const [allUsers, setAllUsers] = useState([]);
 
   useEffect(() => {
     if (!username) return;
 
     socket.emit("user_online", username);
+
+    fetch(`${import.meta.env.VITE_BACKEND_URL}/api/users/${username}`)
+      .then((res) => res.json())
+      .then((data) => setAllUsers(data))
+      .catch((err) => console.error("Error fetching users:", err));
 
     socket.on("connect", () => setIsConnected(true));
     socket.on("disconnect", () => setIsConnected(false));
@@ -100,6 +110,31 @@ function App() {
 
     setUploading(true);
 
+    let fileToUpload = file;
+
+    if (file.type.startsWith("image")) {
+      try {
+        console.log(
+          "Original size:",
+          (file.size / 1024 / 1024).toFixed(2),
+          "MB",
+        );
+        const options = {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1600,
+          useWebWorker: true,
+        };
+        fileToUpload = await imageCompression(file, options);
+        console.log(
+          "Compressed size:",
+          (fileToUpload.size / 1024 / 1024).toFixed(2),
+          "MB",
+        );
+      } catch (err) {
+        console.error("Compression failed, uploading original:", err);
+      }
+    }
+
     const formData = new FormData();
     formData.append("file", file);
     formData.append("upload_preset", "chat_uploads");
@@ -130,6 +165,74 @@ function App() {
     } finally {
       setUploading(false);
       e.target.value = "";
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      audioChunks.current = [];
+
+      recorder.ondataavailable = (e) => {
+        audioChunks.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks.current, { type: "audio/webm" });
+        await uploadVoiceMessage(audioBlob);
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Mic access denied or error:", err);
+      alert("Microphone access is needed to send voice messages.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const uploadVoiceMessage = async (audioBlob) => {
+    if (!selectedUser) return;
+    setUploading(true);
+
+    const formData = new FormData();
+    formData.append("file", audioBlob, "voice-message.webm");
+    formData.append("upload_preset", "chat_uploads");
+
+    try {
+      const res = await fetch(
+        "https://api.cloudinary.com/v1_1/hdkhxhez/auto/upload",
+        { method: "POST", body: formData },
+      );
+      const data = await res.json();
+
+      const messageData = {
+        text: data.secure_url,
+        senderId: username,
+        receiverId: selectedUser,
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        seen: false,
+        isFile: true,
+        fileType: "audio/webm",
+      };
+
+      socket.emit("send_message", messageData);
+    } catch (err) {
+      console.error("Voice upload failed:", err);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -183,28 +286,33 @@ function App() {
           <p className="text-xs uppercase tracking-wider text-slate px-2 mb-2">
             Contacts
           </p>
-          {onlineUsers.length === 0 && (
-            <p className="text-sm text-slate px-2">
-              No one else is online right now.
-            </p>
+          {allUsers.length === 0 && (
+            <p className="text-sm text-slate px-2">No other users available.</p>
           )}
-          {onlineUsers.map((user) => (
-            <div
-              key={user}
-              onClick={() => setSelectedUser(user)}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer transition mb-1 ${
-                selectedUser === user
-                  ? "bg-coral text-white"
-                  : "hover:bg-white/5"
-              }`}
-            >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-mint opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-mint"></span>
-              </span>
-              <span className="text-sm font-medium">{user}</span>
-            </div>
-          ))}
+          {allUsers.map((user) => {
+            const isUserOnline = onlineUsers.includes(user);
+            return (
+              <div
+                key={user}
+                onClick={() => setSelectedUser(user)}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer transition mb-1 ${
+                  selectedUser === user
+                    ? "bg-coral text-white"
+                    : "hover:bg-white/5"
+                }`}
+              >
+                <span className="relative flex h-2 w-2">
+                  {isUserOnline && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-mint opacity-75"></span>
+                  )}
+                  <span
+                    className={`relative inline-flex rounded-full h-2 w-2 ${isUserOnline ? "bg-mint" : "bg-slate"}`}
+                  ></span>
+                </span>
+                <span className="text-sm font-medium">{user}</span>
+              </div>
+            );
+          })}
         </div>
 
         <button
@@ -226,9 +334,17 @@ function App() {
         ) : (
           <>
             <div className="px-6 py-4 border-b border-slate/15 bg-white">
-              <h3 className="font-display font-bold text-ink">
-                {selectedUser}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-display font-bold text-ink">
+                  {selectedUser}
+                </h3>
+                <span
+                  className={`w-2 h-2 rounded-full ${onlineUsers.includes(selectedUser) ? "bg-mint" : "bg-slate/50"}`}
+                />
+                <span className="text-xs text-slate">
+                  {onlineUsers.includes(selectedUser) ? "Online" : "Offline"}
+                </span>
+              </div>
               <p className="text-xs text-coral h-4">
                 {isTyping ? "typing..." : ""}
               </p>
@@ -250,7 +366,13 @@ function App() {
                       }`}
                     >
                       {msg.isFile ? (
-                        msg.fileType?.startsWith("image") ? (
+                        msg.fileType?.startsWith("audio") ? (
+                          <audio
+                            controls
+                            src={msg.text}
+                            className="max-w-full"
+                          />
+                        ) : msg.fileType?.startsWith("image") ? (
                           <img
                             src={msg.text}
                             alt="shared file"
@@ -294,6 +416,16 @@ function App() {
                     accept="image/*,application/pdf"
                   />
                 </label>
+
+                <button
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className={`text-xl transition ${isRecording ? "text-red-500 animate-pulse" : "text-slate hover:text-coral"}`}
+                  title={
+                    isRecording ? "Stop recording" : "Record voice message"
+                  }
+                >
+                  {isRecording ? "⏹️" : "🎤"}
+                </button>
 
                 <input
                   type="text"
