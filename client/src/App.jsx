@@ -22,9 +22,15 @@ function App() {
   const [allUsers, setAllUsers] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [showNewChat, setShowNewChat] = useState(false);
+  const [unreadCounts, setUnreadCounts] = useState({});
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     if (!username) return;
+
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
 
     socket.emit("user_online", username);
 
@@ -47,8 +53,37 @@ function App() {
 
     socket.on("receive_message", (data) => {
       setChat((prevChat) => [...prevChat, data]);
+
       if (data.senderId === selectedUser) {
         socket.emit("mark_seen", { sender: selectedUser, receiver: username });
+      } else {
+        // 1. Unread badge count
+        setUnreadCounts((prev) => ({
+          ...prev,
+          [data.senderId]: (prev[data.senderId] || 0) + 1,
+        }));
+      }
+
+      // 2. In-app toast(popup) notification
+      if (data.senderId !== username) {
+        setToast({
+          sender: data.senderId,
+          text: data.isFile ? "📎 Sent an attachment" : data.text,
+        });
+        setTimeout(() => setToast(null), 3000); // 3 second baad gayab
+      }
+
+      // 3. Browser notification (only when tab is minimize/inactive)
+      if (
+        data.senderId !== username &&
+        document.hidden &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        new Notification(`New message from ${data.senderId}`, {
+          body: data.isFile ? "Sent an attachment" : data.text,
+          icon: "/chat-icon.png",
+        });
       }
     });
 
@@ -85,6 +120,7 @@ function App() {
     if (!selectedUser || !username) return;
 
     setIsTyping(false);
+    setUnreadCounts((prev) => ({ ...prev, [selectedUser]: 0 }));
     socket.emit("join_room", { user1: username, user2: selectedUser });
 
     fetch(
@@ -281,6 +317,14 @@ function App() {
 
   return (
     <div className="flex h-screen bg-paper font-body">
+      {toast && (
+        <div className="fixed top-4 right-4 bg-ink text-white px-4 py-3 rounded-xl shadow-lg z-50 max-w-xs animate-[fadeIn_0.2s_ease-out]">
+          <p className="text-xs text-coral font-semibold mb-0.5">
+            {toast.sender}
+          </p>
+          <p className="text-sm">{toast.text}</p>
+        </div>
+      )}
       {/* SIDEBAR */}
       <div className="w-72 bg-ink text-paper flex flex-col shrink-0">
         <div className="p-5 border-b border-white/10">
@@ -317,6 +361,7 @@ function App() {
               )}
               {contacts.map((user) => {
                 const isUserOnline = onlineUsers.includes(user);
+                const unread = unreadCounts[user] || 0;
                 return (
                   <div
                     key={user}
@@ -335,7 +380,12 @@ function App() {
                         className={`relative inline-flex rounded-full h-2 w-2 ${isUserOnline ? "bg-mint" : "bg-slate/50"}`}
                       ></span>
                     </span>
-                    <span className="text-sm font-medium">{user}</span>
+                    <span className="text-sm font-medium flex-1"> {user}</span>
+                    {unread > 0 && (
+                      <span className="bg-coral text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                        {unread}
+                      </span>
+                    )}
                   </div>
                 );
               })}
