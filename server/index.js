@@ -67,6 +67,26 @@ app.get("/api/messages/:user1/:user2", async (req, res) => {
   }
 });
 
+app.get("/api/contacts/:username", async (req, res) => {
+  try {
+    const { username } = req.params;
+
+    const messages = await Message.find({
+      $or: [{ senderId: username }, { receiverId: username }],
+    });
+
+    const contactSet = new Set();
+    messages.forEach((msg) => {
+      if (msg.senderId !== username) contactSet.add(msg.senderId);
+      if (msg.receiverId !== username) contactSet.add(msg.receiverId);
+    });
+
+    res.json(Array.from(contactSet));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch contacts" });
+  }
+});
+
 const onlineUsers = {};
 
 io.on("connection", (socket) => {

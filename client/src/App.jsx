@@ -20,11 +20,18 @@ function App() {
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const audioChunks = useRef([]);
   const [allUsers, setAllUsers] = useState([]);
+  const [contacts, setContacts] = useState([]);
+  const [showNewChat, setShowNewChat] = useState(false);
 
   useEffect(() => {
     if (!username) return;
 
     socket.emit("user_online", username);
+
+    fetch(`${import.meta.env.VITE_BACKEND_URL}/api/contacts/${username}`)
+      .then((res) => res.json())
+      .then((data) => setContacts(data))
+      .catch((err) => console.error("Error fetching contacts:", err));
 
     fetch(`${import.meta.env.VITE_BACKEND_URL}/api/users/${username}`)
       .then((res) => res.json())
@@ -90,6 +97,12 @@ function App() {
       })
       .catch((err) => console.error("Error fetching messages:", err));
   }, [selectedUser, username]);
+
+  useEffect(() => {
+    if (selectedUser && !contacts.includes(selectedUser)) {
+      setContacts((prev) => [...prev, selectedUser]);
+    }
+  }, [selectedUser]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -283,36 +296,73 @@ function App() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-3">
-          <p className="text-xs uppercase tracking-wider text-slate px-2 mb-2">
-            Contacts
-          </p>
-          {allUsers.length === 0 && (
-            <p className="text-sm text-slate px-2">No other users available.</p>
+          <div className="flex items-center justify-between px-2 mb-2">
+            <p className="text-xs uppercase tracking-wider text-slate">
+              {showNewChat ? "Start New Chat" : "Contacts"}
+            </p>
+            <button
+              onClick={() => setShowNewChat(!showNewChat)}
+              className="text-xs text-coral font-semibold"
+            >
+              {showNewChat ? "Back" : "+ New"}
+            </button>
+          </div>
+
+          {!showNewChat ? (
+            <>
+              {contacts.length === 0 && (
+                <p className="text-sm text-slate px-2">
+                  No chats yet. Tap "+ New" to start one.
+                </p>
+              )}
+              {contacts.map((user) => {
+                const isUserOnline = onlineUsers.includes(user);
+                return (
+                  <div
+                    key={user}
+                    onClick={() => setSelectedUser(user)}
+                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer transition mb-1 ${
+                      selectedUser === user
+                        ? "bg-coral text-white"
+                        : "hover:bg-white/5"
+                    }`}
+                  >
+                    <span className="relative flex h-2 w-2">
+                      {isUserOnline && (
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-mint opacity-75"></span>
+                      )}
+                      <span
+                        className={`relative inline-flex rounded-full h-2 w-2 ${isUserOnline ? "bg-mint" : "bg-slate/50"}`}
+                      ></span>
+                    </span>
+                    <span className="text-sm font-medium">{user}</span>
+                  </div>
+                );
+              })}
+            </>
+          ) : (
+            <>
+              {allUsers.filter((u) => !contacts.includes(u)).length === 0 && (
+                <p className="text-sm text-slate px-2">
+                  No new users to chat with.
+                </p>
+              )}
+              {allUsers
+                .filter((u) => !contacts.includes(u))
+                .map((user) => (
+                  <div
+                    key={user}
+                    onClick={() => {
+                      setSelectedUser(user);
+                      setShowNewChat(false);
+                    }}
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-white/5 transition mb-1"
+                  >
+                    <span className="text-sm font-medium">{user}</span>
+                  </div>
+                ))}
+            </>
           )}
-          {allUsers.map((user) => {
-            const isUserOnline = onlineUsers.includes(user);
-            return (
-              <div
-                key={user}
-                onClick={() => setSelectedUser(user)}
-                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer transition mb-1 ${
-                  selectedUser === user
-                    ? "bg-coral text-white"
-                    : "hover:bg-white/5"
-                }`}
-              >
-                <span className="relative flex h-2 w-2">
-                  {isUserOnline && (
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-mint opacity-75"></span>
-                  )}
-                  <span
-                    className={`relative inline-flex rounded-full h-2 w-2 ${isUserOnline ? "bg-mint" : "bg-slate"}`}
-                  ></span>
-                </span>
-                <span className="text-sm font-medium">{user}</span>
-              </div>
-            );
-          })}
         </div>
 
         <button
