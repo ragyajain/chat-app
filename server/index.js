@@ -18,7 +18,8 @@ app.use(express.json());
 const authRoutes = require("./routes/auth");
 app.use("/api/auth", authRoutes);
 
-mongoose.connect(process.env.MONGO_URI)
+mongoose
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
@@ -26,7 +27,7 @@ const server = http.createServer(app);
 
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://chat-app-eight-lovat-97.vercel.app/", 
+  "https://chat-app-eight-lovat-97.vercel.app/",
 ];
 
 app.use(cors({ origin: allowedOrigins }));
@@ -39,13 +40,15 @@ const io = new Server(server, {
 });
 
 app.get("/", (req, res) => {
-    res.send("Chat server is running");
+  res.send("Chat server is running");
 });
 
 app.get("/api/users/:username", async (req, res) => {
   try {
     const { username } = req.params;
-    const users = await User.find({ username: { $ne: username } }).select("username -_id");
+    const users = await User.find({ username: { $ne: username } }).select(
+      "username -_id",
+    );
     res.json(users.map((u) => u.username));
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch users" });
@@ -94,12 +97,12 @@ io.on("connection", (socket) => {
 
   socket.on("user_online", (username) => {
     onlineUsers[username] = socket.id;
-    socket.username = username; 
+    socket.username = username;
     io.emit("online_users", Object.keys(onlineUsers));
   });
 
   socket.on("join_room", ({ user1, user2 }) => {
-    const roomId = [user1, user2].sort().join("-"); 
+    const roomId = [user1, user2].sort().join("-");
     socket.join(roomId);
     console.log(`${socket.username} joined room: ${roomId}`);
   });
@@ -115,25 +118,40 @@ io.on("connection", (socket) => {
   });
 
   socket.on("send_message", async (data) => {
-    console.log("📩 Message received:", data);
-
     const roomId = [data.senderId, data.receiverId].sort().join("-");
 
     try {
       const newMessage = new Message(data);
-      await newMessage.save();
+      const savedMessage = await newMessage.save();
+      io.to(roomId).emit("receive_message", savedMessage);
     } catch (err) {
       console.error("❌ Error saving message:", err);
     }
+  });
 
-    io.to(roomId).emit("receive_message", data);
+  socket.on("delete_message", async ({ messageId, sender, receiver }) => {
+    try {
+      const msg = await Message.findById(messageId);
+
+      if (!msg || msg.senderId !== sender) return;
+
+      msg.text = "This message was deleted";
+      msg.deleted = true;
+      msg.isFile = false;
+      await msg.save();
+
+      const roomId = [sender, receiver].sort().join("-");
+      io.to(roomId).emit("message_deleted", { messageId });
+    } catch (err) {
+      console.error("❌ Error deleting message:", err);
+    }
   });
 
   socket.on("mark_seen", async ({ sender, receiver }) => {
     try {
       await Message.updateMany(
         { senderId: sender, receiverId: receiver, seen: false },
-        { $set: { seen: true } }
+        { $set: { seen: true } },
       );
 
       const roomId = [sender, receiver].sort().join("-");
@@ -155,5 +173,5 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });

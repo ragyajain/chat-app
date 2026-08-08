@@ -28,6 +28,10 @@ const messageSchema = new mongoose.Schema({
   fileType: {
     type: String,
     default: null,
+  },
+  deleted: {
+    type: Boolean,
+    default: false,
   }
 }, { timestamps: true });
 

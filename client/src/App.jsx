@@ -87,6 +87,21 @@ function App() {
       }
     });
 
+    socket.on("message_deleted", ({ messageId }) => {
+      setChat((prevChat) =>
+        prevChat.map((msg) =>
+          msg._id === messageId
+            ? {
+                ...msg,
+                text: "This message was deleted",
+                deleted: true,
+                isFile: false,
+              }
+            : msg,
+        ),
+      );
+    });
+
     socket.on("user_typing", (sender) => {
       if (sender === selectedUser) setIsTyping(true);
     });
@@ -113,6 +128,7 @@ function App() {
       socket.off("user_typing");
       socket.off("user_stop_typing");
       socket.off("messages_seen");
+      socket.off("message_deleted");
     };
   }, [username, selectedUser]);
 
@@ -305,6 +321,14 @@ function App() {
     setMessage("");
   };
 
+  const deleteMessage = (messageId) => {
+    socket.emit("delete_message", {
+      messageId,
+      sender: username,
+      receiver: selectedUser,
+    });
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("username");
@@ -455,49 +479,61 @@ function App() {
                 const isOwn = msg.senderId === username;
                 return (
                   <div
-                    key={index}
-                    className={`flex ${isOwn ? "justify-end" : "justify-start"}`}
+                    key={msg._id || index}
+                    className={`flex ${isOwn ? "justify-end" : "justify-start"} group`}
                   >
-                    <div
-                      className={`max-w-[60%] px-4 py-2.5 shadow-sm ${
-                        isOwn
-                          ? "bg-coral text-white rounded-2xl rounded-br-sm"
-                          : "bg-white text-ink rounded-2xl rounded-bl-sm"
-                      }`}
-                    >
-                      {msg.isFile ? (
-                        msg.fileType?.startsWith("audio") ? (
-                          <audio
-                            controls
-                            src={msg.text}
-                            className="max-w-full"
-                          />
-                        ) : msg.fileType?.startsWith("image") ? (
-                          <img
-                            src={msg.text}
-                            alt="shared file"
-                            className="rounded-lg max-w-full mb-1"
-                          />
-                        ) : (
-                          <a
-                            href={msg.text}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="underline text-sm"
-                          >
-                            📄 View File
-                          </a>
-                        )
-                      ) : (
-                        <p className="text-sm">{msg.text}</p>
+                    <div className="relative max-w-[60%]">
+                      {isOwn && !msg.deleted && (
+                        <button
+                          onClick={() => deleteMessage(msg._id)}
+                          className="absolute -left-6 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition text-slate hover:text-red-500 text-xs"
+                          title="Delete message"
+                        >
+                          🗑️
+                        </button>
                       )}
-                      <span
-                        className={`text-[10px] block text-right mt-1 ${
-                          isOwn ? "text-white/70" : "text-slate"
-                        }`}
+
+                      <div
+                        className={`px-4 py-2.5 shadow-sm ${
+                          isOwn
+                            ? "bg-coral text-white rounded-2xl rounded-br-sm"
+                            : "bg-white text-ink rounded-2xl rounded-bl-sm"
+                        } ${msg.deleted ? "italic opacity-60" : ""}`}
                       >
-                        {msg.time} {isOwn && (msg.seen ? "✓✓" : "✓")}
-                      </span>
+                        {msg.deleted ? (
+                          <p className="text-sm">This message was deleted</p>
+                        ) : msg.isFile ? (
+                          msg.fileType?.startsWith("audio") ? (
+                            <audio
+                              controls
+                              src={msg.text}
+                              className="max-w-full"
+                            />
+                          ) : msg.fileType?.startsWith("image") ? (
+                            <img
+                              src={msg.text}
+                              alt="shared file"
+                              className="rounded-lg max-w-full mb-1"
+                            />
+                          ) : (
+                            <a
+                              href={msg.text}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline text-sm"
+                            >
+                              📄 View File
+                            </a>
+                          )
+                        ) : (
+                          <p className="text-sm">{msg.text}</p>
+                        )}
+                        <span
+                          className={`text-[10px] block text-right mt-1 ${isOwn ? "text-white/70" : "text-slate"}`}
+                        >
+                          {msg.time} {isOwn && (msg.seen ? "✓✓" : "✓")}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
