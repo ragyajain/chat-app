@@ -2,7 +2,7 @@
 
 A full-stack real-time messaging application built with the MERN stack and Socket.io, featuring private 1-on-1 conversations, live typing indicators, and read receipts.
 
-**[Live Demo](https://chat-app-eight-lovat-97.vercel.app/)** 
+**[Live Demo](chat-app-ragyajains-projects.vercel.app)** 
 
 ---
 
