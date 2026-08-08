@@ -2,7 +2,7 @@
 
 A full-stack real-time messaging application built with the MERN stack and Socket.io, featuring private 1-on-1 conversations, live typing indicators, and read receipts.
 
-**[Live Demo](#)** · **[Report a Bug](#)**
+**[Live Demo](https://chat-app-eight-lovat-97.vercel.app/)** 
 
 ---
 
@@ -84,7 +84,7 @@ Message deletion follows the same room-scoped pattern, with a server-side owners
 
 1. Clone the repo
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/ragyajain/chat-app.git
    cd chat-app
    ```
 
